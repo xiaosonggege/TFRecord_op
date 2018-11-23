@@ -40,42 +40,41 @@ feature_batch, target_batch = fileop.ParseDequeue(r'C:\Users\xiaosong\Anaconda3\
 #结合TFRecord文件解析编组的十折交叉验证
 ######################################
 with tf.Session() as sess:
+    sess.run(tf.local_variables_initializer())
+    # sess.run(tf.global_variables_initializer())
 
-    with tf.Session() as sess:
-        sess.run(tf.local_variables_initializer())
-        # sess.run(tf.global_variables_initializer())
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+    # 十折交叉验证进行10轮, test_batch为测试集
+    threshold = 100
+    train_steps = 0
+    i = 0
+    try:
+        while not coord.should_stop():  # 如果线程应该停止则返回True
+            cur_feature_batch, cur_target_batch = sess.run([feature_batch, target_batch])
 
-        #十折交叉验证进行10轮, test_batch为测试集
-        threshold = 100
-        train_steps = 0
-        i = 0
-        try:
-            while not coord.should_stop():  # 如果线程应该停止则返回True
-                cur_feature_batch, cur_target_batch = sess.run([feature_batch, target_batch])
+            if train_steps // 11 != i:
+                print(cur_feature_batch, cur_target_batch)
+                # 此处可以添加训练数据操作ndarray类型节点sess.run([], feed_dict= {})
+            else:
+                test_batch = (cur_feature_batch, cur_target_batch)
+                print('test_set NO.%s:' % i)
+                print(test_batch)
+                i += 1
+                # 此处可以添加测试数据操作ndarray类型节点ress.run([], feed_dict= {})
 
-                if train_steps // 11 != i:
-                    print(cur_feature_batch, cur_target_batch)
-                    # 此处可以添加训练数据操作ndarray类型节点sess.run([], feed_dict= {})
-                else:
-                    test_batch = (cur_feature_batch, cur_target_batch)
-                    print('test_set NO.%s:' % i)
-                    print(test_batch)
-                    i += 1
-                    # 此处可以添加测试数据操作ndarray类型节点ress.run([], feed_dict= {})
+            train_steps += 1
+            if train_steps >= threshold:
+                coord.request_stop()  # 请求该线程停止，若执行则使得coord.should_stop()函数返回True
 
-                train_steps += 1
-                if train_steps >= threshold:
-                    coord.request_stop()  # 请求该线程停止，若执行则使得coord.should_stop()函数返回True
+    except tf.errors.OutOfRangeError:
+        print('Done training epoch limit reached')
+    finally:
+        # When done, ask the threads to stop. 请求该线程停止
+        coord.request_stop()
+        # And wait for them to actually do it. 等待被指定的线程终止
+        coord.join(threads)
 
-        except tf.errors.OutOfRangeError:
-            print('Done training epoch limit reached')
-        finally:
-            # When done, ask the threads to stop. 请求该线程停止
-            coord.request_stop()
-            # And wait for them to actually do it. 等待被指定的线程终止
-            coord.join(threads)
 
 
